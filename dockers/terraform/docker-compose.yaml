@@ -1,0 +1,38 @@
+version: '3.8'
+services:
+  terraform:
+    build:
+      context: .
+      dockerfile: terraform2.Dockerfile
+    
+    environment:
+      AWS_ACCESS_KEY_ID: AKIA337KG6NJ6VOJCQ6R
+      AWS_SECRET_ACCESS_KEY: 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
+      AWS_REGION: us-east-1
+      AWS_DEFAULT_REGION: us-east-1
+
+    #image: hashicorp/terraform:latest
+    #volumes:
+    #  - .:/app
+    volumes:
+      - ./:/workspace
+    #working_dir: /app
+    #command: terraform init
+
+# Instructions to run the Terraform container
+#docker-compose build
+
+# Initialize terraform
+
+#docker-compose run --rm terraform init
+
+#docker-compose run --rm terraform validate
+
+# Plan terraform
+#docker-compose run --rm terraform plan
+
+# Apply terraform
+#docker-compose run --rm terraform apply
+
+# Destroy terraform
+#docker-compose run --rm terraform destroy
