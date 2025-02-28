@@ -5,11 +5,8 @@ services:
       context: .
       dockerfile: terraform2.Dockerfile
     
-    environment:
-      AWS_ACCESS_KEY_ID: AKIA337KG6NJ6VOJCQ6R
-      AWS_SECRET_ACCESS_KEY: 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
-      AWS_REGION: us-east-1
-      AWS_DEFAULT_REGION: us-east-1
+    #environment:
+
 
     #image: hashicorp/terraform:latest
     #volumes:
