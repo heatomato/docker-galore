@@ -1,0 +1,75 @@
+# This workflow is triggered every push to any branch, and it builds a Docker image from the Dockerfile in the root of the repository.
+# The image is tagged with the commit SHA and pushed to the GitHub Container Registry.
+# The workflow also includes a manual trigger option, allowing you to run it on demand.
+
+name: Stream consumer CI/CD Workflow
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'koda/domains/tracking/live/stream_consumer/**'
+
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'koda/domains/tracking/live/stream_consumer/**'
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to deploy to"
+        required: true
+        default: "development"
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev, prod]
+
+    steps:
+      # Step 1: This step checks out your repository under $GITHUB_WORKSPACE, so your job can access it.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Docker Buildx
+      - name: Build Koda Image
+        uses: ./.github/actions/build_dev_image
+
+      # Step 3: Linting Check
+      - name: Linting
+        run: docker run --rm koda:dev mise check_code
+
+      # Step 4: Unit tests
+      - name: Poetry sanity check
+        run: docker run --rm koda:dev poetry check
+
+      - name: Unit tests
+        run: docker run --rm koda:dev pytest
+
+      # Step 5: Build the service image and push it to container registry
+      - name: Build and Push Docker Image
+        uses: ./.github/actions/build_service
+        with:
+          service_name: stream_consumer
+          registry: ${{ env.REGISTRY }}
+          tag: ${{matrix.environment}}-${{ github.sha }}
+          registry_password: ${{ secrets.GHCR_TOKEN }}
+          environment: ${{ matrix.environment }}
+
+      # Step 6: Integration tests
+      - name: Integration tests
+        run: echo "Running integration tests..."
+
+      # Step 7: Deploy to the server
+      - name: Deploy to server
+        run: |
+          echo "Deploying to server..."
+          # Add your deployment commands here
+          # For example, you can use SSH to connect to your server and run deployment scripts
+          # ssh user@your-server "docker pull ${{ env.REGISTRY }}/${{ github.repository }}:${{ matrix.environment }}-${{ github.sha }}"

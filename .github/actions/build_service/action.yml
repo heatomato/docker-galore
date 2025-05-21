@@ -1,0 +1,92 @@
+# This action builds a Docker image and pushes it to the GitHub Container Registry. It uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
+name: build_push_ghcr
+description: Build a Docker image and push it to the GitHub Container Registry
+
+# This inputs section defines the inputs that the action will accept.
+inputs:
+  service_name:
+    description: The name of the service to build and push like "consumer"
+    required: true
+    type: string
+  registry:
+    description: The registry to push the image to
+    required: true
+    default: ghcr.io
+    type: string
+  tag:
+    description: The tag to use for the image
+    required: true
+    default: latest
+    type: string
+  registry_password:
+    description: The password for the registry
+    required: true
+    type: string
+  environment:
+    description: The environment to use for the image
+    required: true
+    default: dev
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    # Step 1: Checkout the repository
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    # Step 2: Set up GHCR authentication
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ inputs.registry }}
+        username: deploybot-dct    #${{ github.actor }}
+        password: ${{ inputs.registry_password }}
+
+    # Step 3: Get metadata for the Docker image
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+    # Step 4: Build Image for each environment
+    - name: Build Dev Image
+      shell: bash
+      if: ${{ inputs.environment == 'dev' }}
+      run: |
+        docker buildx build \
+          --build-arg BASE_IMAGE_DEV=ghcr.io/digitalcomtech/koda:dev \
+          --target dev \
+          -f koda/domains/tracking/live/build/Dockerfile.${{ inputs.service_name }} \
+          --tag ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.service_name }}:${{ inputs.tag }} \
+          --cache-from=type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.service_name }}:cache-dev \
+          --cache-to=type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.service_name }}:cache-dev,mode=max \
+          --load \
+          koda/domains/tracking/live/${{ inputs.service_name }}
+
+    - name: Build Prod Image
+      shell: bash
+      if: ${{ inputs.environment == 'prod' }}
+      run: |
+        docker buildx build \
+          --build-arg BASE_IMAGE_PROD=ghcr.io/digitalcomtech/koda:prod \
+          --target prod \
+          -f koda/domains/tracking/live/build/Dockerfile.${{ inputs.service_name }} \
+          --tag ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.service_name }}:${{ inputs.tag }} \
+          --cache-from=type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.service_name }}:cache-prod \
+          --cache-to=type=registry,ref=${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.service_name }}:cache-prod,mode=max \
+          --load \
+          koda/domains/tracking/live/${{ inputs.service_name }}
+
+    # Step 4: Verify the built images exist locally
+    - name: Verify local images
+      shell: bash
+      run: |
+        docker images
+
+    # Step 5: Push the Docker image to the registry
+    - name: Push to GitHub Container Registry
+      shell: bash
+      run: |
+        docker push ${{ inputs.registry }}/${{ github.repository_owner }}/${{ inputs.service_name }}:${{ inputs.tag }}

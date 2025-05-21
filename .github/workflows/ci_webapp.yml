@@ -1,0 +1,68 @@
+# This file defines our webapp CI workflow (pipeline)
+# For more information: README> CI Pipeline Strategy
+
+name: Webapp CI/CD Workflow
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'koda/domains/tracking/live/webapp/**'
+
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'koda/domains/tracking/live/webapp/**'
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [dev,prod]
+
+    steps:
+      # Step 1: This step checks out your repository under $GITHUB_WORKSPACE, so your job can access it.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Docker Buildx
+      - name: Get Development Environment Image
+        uses: ./.github/actions/build_live_webapp_dev
+
+      # Step 3: Linting Check
+      - name: Lint check (using eslint)
+        run: docker run --rm koda_live_webapp:dev npm run lint
+
+      # Step 4: Type check
+      - name: Typing check (using vue-tsc)
+        run: docker run --rm koda_live_webapp:dev npm run type-check
+
+      # Step 5: Unit tests
+      - name: Unit tests
+        run: docker run --rm koda_live_webapp:dev npm run test:unit -- --run
+
+      # Step 3: Build the service image and push it to container registry
+      - name: Build and push Docker Image
+        uses: ./.github/actions/build_service
+        with:
+          service_name: webapp
+          registry: ${{ env.REGISTRY }}
+          tag: ${{matrix.environment}}-${{ github.sha }}
+          registry_password: ${{ secrets.GHCR_TOKEN }}
+          environment: ${{ matrix.environment }}
+
+      # Step 5: Integration tests
+      - name: Integration tests
+        run: echo "Running integration tests..."
+
+      # Step 6: Deploy to the server
+      - name: Deploy to server
+        run: |
+          echo "Deploying to server..."
+          # Add your deployment commands here
+          # For example, you can use SSH to connect to your server and run deployment scripts
+          # ssh user@your-server "docker pull ${{ env.REGISTRY }}/${{ github.repository }}:${{ matrix.environment }}-${{ github.sha }}"

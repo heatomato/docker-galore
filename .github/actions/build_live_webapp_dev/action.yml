@@ -1,0 +1,46 @@
+# This actions is for building a Development Environment Image
+# For details: README> CI Pipeline Strategy
+
+name: "dev_build_image"
+description: "Steps for building a Development Environment Image"
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Define a build cache
+      uses: actions/cache@v3
+      # Setting up the cache so that it can be used for docker build
+      with:
+        path: /tmp/.build_cache
+        # The build cache key is essential for effective and efficient caching.
+        # Track files which upon change should yield to producing a new
+        # Development Environment image.
+        key: >-
+          ${{ runner.os }}_build_cache_${{ hashFiles(
+            'koda/domains/tracking/live/build/Dockerfile',
+            'koda/domains/tracking/live/webapp/package.json',
+            'koda/domains/tracking/live/webapp/package-lock.json',
+            'koda/domains/tracking/live/webapp/.dockerignore'
+          ) }}
+
+        restore-keys: |
+          ${{ runner.os }}_build_cache_
+
+    - name: Build image
+      shell: bash
+      # By using --cache-from and --cache-to docker build can use results from previous builds
+      # done even by other runs of workflows.
+      run: |
+        docker buildx build \
+        --cache-from=type=local,src=/tmp/.build_cache \
+        --cache-to=type=local,dest=/tmp/.build_cache,mode=max \
+        -f koda/domains/tracking/live/build/Dockerfile.webapp \
+        --target dev \
+        --load \
+        -t koda_live_webapp:dev \
+        koda/domains/tracking/live/webapp

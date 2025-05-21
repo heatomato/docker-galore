@@ -1,0 +1,58 @@
+# Want to create a docker image for the consumer service
+# This is the Dockerfile for the consumer service
+# The consumer service is a python service that listens to the kafka topic and processes the messages
+
+
+# Use the official Python image
+FROM python:3.13-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    POETRY_VERSION=2.1.1
+
+# Configure Poetry to create virtual environments inside the project
+ENV POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_NO_INTERACTION=1
+
+# Modify this based on your actual project structure
+#ENV PYTHONPATH="/app/domains/tracking/live/consumer/src:/app/domains/tracking/live/consumer:/domains/tracking/live/consumer"
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+ENV POETRY_VERSION=2.1.1
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy Poetry configuration files
+COPY pyproject.toml poetry.lock  ./
+
+# Check for valid poetry file
+RUN poetry check
+
+# Configure Poetry to not create virtual environments
+#RUN poetry config virtualenvs.create false
+# Install dependencies using
+RUN poetry install --no-root --without dev
+
+# Copy the consumer service code into the container
+COPY . .
+
+# Activate the virtual environment
+#ENV PATH="/app/.venv/bin:$PATH"
+
+# Run the consumer service
+CMD ["poetry", "run", "python", "-m", "domains.tracking.live.stream_consumer.src.main"]
+
+
+# python -m domains.tracking.live.stream_consumer.src.main
+# poetry run python -m domains.tracking.live.stream_consumer.src.main
+# sudo docker run -it -t kafka-consumer-app /bin/bash
+# sudo docker build --no-cache  -f build/Dockerfile.stream_consumer -t kafka-consumer-app:latest . > kafka_consumer.log 2>&1
